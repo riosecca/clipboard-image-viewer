@@ -1,23 +1,27 @@
 # Clipboard Image Viewer
 
-ブラウザのクリップボードから画像を読み込み、表示・拡大縮小・移動できるシングルページのビューアです。
+A single-page viewer for loading images from the browser clipboard or local files, then viewing, zooming, and panning them.
 
-## 使い方
+## Usage
 
-1. `index.html` を対応ブラウザで開きます。
-2. 画像をコピーします。
-3. ページ上で `Ctrl + V`（macOS は `Cmd + V`）を押すか、**Read Clipboard** をクリックします。
+1. Open `index.html` in a supported browser.
+2. Copy an image.
+3. Press `Ctrl + V` (`Cmd + V` on macOS) on the page, or click **Read Clipboard**. You can also open an image by dragging and dropping its file onto the page.
 
-## 主な機能
+## Features
 
-- ホイールまたはボタンでのズーム
-- 画像を画面内に収める表示と 100% 表示
-- ドラッグによる画像の移動
-- 水平反転・上下反転・向きのリセット
-- 移動・最小化できる操作パネル
+- Zoom with the mouse wheel or controls
+- Fit-to-screen and 100% views
+- Drag to pan images
+- Horizontal and vertical flipping, plus orientation reset
+- Rotate left or right in 90° increments
+- Display dimensions, format, file size, and zoom level
+- Full-screen view
+- Save loaded images as PNG files
+- Movable, collapsible control panel
 
-> Clipboard API の利用には、ブラウザの権限許可や HTTPS または localhost での実行が必要になる場合があります。貼り付け操作は通常そのまま利用できます。
+> Using the Clipboard API may require browser permission and an HTTPS or localhost context. Standard paste operations usually work without additional setup.
 
-## 開発
+## Development
 
-ビルド工程や依存関係はありません。`index.html` を直接編集・表示してください。
+There is no build step or dependency setup. Edit and open `index.html` directly.

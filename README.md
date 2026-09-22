@@ -2,6 +2,8 @@
 
 A single-page viewer for loading images from the browser clipboard or local files, then viewing, zooming, and panning them.
 
+Try it online: [riosecca.github.io/clipboard-image-viewer](https://riosecca.github.io/clipboard-image-viewer/)
+
 ## Usage
 
 1. Open `index.html` in a supported browser.
@@ -25,3 +27,7 @@ A single-page viewer for loading images from the browser clipboard or local file
 ## Development
 
 There is no build step or dependency setup. Edit and open `index.html` directly.
+
+## License
+
+This project is licensed under the [MIT License](LICENSE).

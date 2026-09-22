@@ -134,6 +134,16 @@
       background: #555;
     }
 
+    select {
+      cursor: pointer;
+      border: 0;
+      border-radius: 8px;
+      padding: 5px 7px;
+      background: #333;
+      color: #fff;
+      font-size: 12px;
+    }
+
     #minimizeBtn {
       padding: 4px 8px;
       font-size: 12px;
@@ -187,10 +197,15 @@
       <button id="rotateLeftBtn" title="Rotate 90° left">↶ 90°</button>
       <button id="rotateRightBtn" title="Rotate 90° right">↷ 90°</button>
       <button id="flipHBtn">Flip Horizontal</button>
-      <button id="upsideDownBtn">Upside Down</button>
-      <button id="resetOrientationBtn">Reset Orientation</button>
-      <button id="fullscreenBtn">Fullscreen</button>
-      <button id="saveBtn">Save PNG</button>
+      <button id="upsideDownBtn">180°</button>
+      <button id="resetOrientationBtn">Reset</button>
+      <button id="fullscreenBtn">Full</button>
+      <select id="saveFormat" aria-label="Save format">
+        <option value="png">PNG</option>
+        <option value="jpeg">JPEG</option>
+        <option value="pdf">PDF</option>
+      </select>
+      <button id="saveBtn">Save</button>
       <span id="scaleText">-</span>
       <span id="imageInfo" class="smallText">No image</span>
       <span class="smallText">Wheel: zoom / Drag: move</span>
@@ -471,20 +486,77 @@
       requestAnimationFrame(updateSize);
     });
 
+    function downloadBlob(blob, filename) {
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = filename;
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+    }
+
+    function createPdf(jpegBytes, width, height) {
+      // PDF coordinates are points. Scale oversized images to PDF's 14,400-point limit.
+      const scale = Math.min(1, 14400 / Math.max(width, height));
+      const pageWidth = width * scale;
+      const pageHeight = height * scale;
+      const encoder = new TextEncoder();
+      const content = `q\n${pageWidth} 0 0 ${pageHeight} 0 0 cm\n/Im0 Do\nQ\n`;
+      const objects = [
+        "<< /Type /Catalog /Pages 2 0 R >>",
+        "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageWidth} ${pageHeight}] /Resources << /XObject << /Im0 5 0 R >> >> /Contents 4 0 R >>`,
+        `<< /Length ${encoder.encode(content).length} >>\nstream\n${content}endstream`,
+        null,
+      ];
+      const parts = [encoder.encode("%PDF-1.4\n%âãÏÓ\n")];
+      const offsets = [0];
+      let position = parts[0].length;
+
+      objects.forEach((object, index) => {
+        offsets.push(position);
+        const header = encoder.encode(`${index + 1} 0 obj\n`);
+        parts.push(header);
+        position += header.length;
+        if (index === 4) {
+          const imageHeader = encoder.encode(`<< /Type /XObject /Subtype /Image /Width ${width} /Height ${height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${jpegBytes.length} >>\nstream\n`);
+          const imageEnd = encoder.encode("\nendstream");
+          parts.push(imageHeader, jpegBytes, imageEnd);
+          position += imageHeader.length + jpegBytes.length + imageEnd.length;
+        } else {
+          const body = encoder.encode(`${object}\n`);
+          parts.push(body);
+          position += body.length;
+        }
+        const end = encoder.encode("endobj\n");
+        parts.push(end);
+        position += end.length;
+      });
+
+      const xrefPosition = position;
+      let xref = `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+      offsets.slice(1).forEach(offset => { xref += `${String(offset).padStart(10, "0")} 00000 n \n`; });
+      xref += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefPosition}\n%%EOF\n`;
+      parts.push(encoder.encode(xref));
+      return new Blob(parts, { type: "application/pdf" });
+    }
+
     document.getElementById("saveBtn").addEventListener("click", () => {
       if (!naturalWidth || !naturalHeight) return;
+      const format = document.getElementById("saveFormat").value;
       const canvas = document.createElement("canvas");
       canvas.width = naturalWidth;
       canvas.height = naturalHeight;
       canvas.getContext("2d").drawImage(image, 0, 0);
       canvas.toBlob(blob => {
         if (!blob) return;
-        const link = document.createElement("a");
-        link.href = URL.createObjectURL(blob);
-        link.download = "clipboard-image.png";
-        link.click();
-        setTimeout(() => URL.revokeObjectURL(link.href), 1000);
-      }, "image/png");
+        if (format === "pdf") {
+          blob.arrayBuffer().then(buffer => {
+            downloadBlob(createPdf(new Uint8Array(buffer), canvas.width, canvas.height), "clipboard-image.pdf");
+          });
+          return;
+        }
+        downloadBlob(blob, `clipboard-image.${format === "jpeg" ? "jpg" : "png"}`);
+      }, format === "png" ? "image/png" : "image/jpeg", format === "jpeg" ? 0.92 : undefined);
     });
 
     let imageDragging = false;

@@ -19,7 +19,7 @@ Try it online: [riosecca.github.io/clipboard-image-viewer](https://riosecca.gith
 - Rotate left or right in 90° increments
 - Display dimensions, format, file size, and zoom level
 - Full-screen view
-- Save loaded images as PNG files
+- Save loaded images as PNG, JPEG, or single-page PDF files
 - Movable, collapsible control panel
 
 > Using the Clipboard API may require browser permission and an HTTPS or localhost context. Standard paste operations usually work without additional setup.

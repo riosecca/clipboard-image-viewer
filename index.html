@@ -1,0 +1,446 @@
+
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Clipboard Image Viewer</title>
+  <style>
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: Arial, Helvetica, sans-serif;
+      background: #111;
+      color: #fff;
+    }
+
+    #viewer {
+      width: 100vw;
+      height: 100vh;
+      overflow: auto;
+      cursor: grab;
+      background:
+        linear-gradient(45deg, #181818 25%, transparent 25%),
+        linear-gradient(-45deg, #181818 25%, transparent 25%),
+        linear-gradient(45deg, transparent 75%, #181818 75%),
+        linear-gradient(-45deg, transparent 75%, #181818 75%);
+      background-size: 24px 24px;
+      background-position: 0 0, 0 12px, 12px -12px, -12px 0px;
+    }
+
+    #viewer.dragging {
+      cursor: grabbing;
+      user-select: none;
+    }
+
+    #content {
+      position: relative;
+      margin: auto;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #image {
+      display: block;
+      user-select: none;
+      pointer-events: none;
+      transform-origin: center center;
+    }
+
+    #hint {
+      position: fixed;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      color: #bbb;
+      font-size: 20px;
+      pointer-events: none;
+      text-align: center;
+      line-height: 1.7;
+    }
+
+    #toolbar {
+      position: fixed;
+      top: 12px;
+      left: 12px;
+      z-index: 20;
+      min-width: 320px;
+      background: rgba(0, 0, 0, 0.75);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 12px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+      backdrop-filter: blur(8px);
+      overflow: hidden;
+    }
+
+    #toolbarHeader {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 6px 8px;
+      cursor: move;
+      background: rgba(255, 255, 255, 0.08);
+      user-select: none;
+      font-size: 12px;
+      color: #ddd;
+    }
+
+    #toolbarTitle {
+      white-space: nowrap;
+    }
+
+    #toolbarBody {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-items: center;
+      padding: 8px;
+    }
+
+    button {
+      cursor: pointer;
+      border: 0;
+      border-radius: 8px;
+      padding: 6px 9px;
+      background: #333;
+      color: #fff;
+      font-size: 12px;
+      line-height: 1;
+    }
+
+    button:hover {
+      background: #555;
+    }
+
+    #minimizeBtn {
+      padding: 4px 8px;
+      font-size: 12px;
+    }
+
+    #scaleText {
+      font-size: 12px;
+      color: #ddd;
+      min-width: 44px;
+      text-align: right;
+    }
+
+    #toolbar.minimized {
+      min-width: auto;
+      width: auto;
+    }
+
+    #toolbar.minimized #toolbarBody {
+      display: none;
+    }
+
+    #toolbar.minimized #toolbarTitle {
+      max-width: 70px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .smallText {
+      font-size: 11px;
+      color: #aaa;
+    }
+
+    .activeToggle {
+      background: #666;
+    }
+  </style>
+</head>
+<body>
+  <div id="toolbar">
+    <div id="toolbarHeader">
+      <span id="toolbarTitle">Image Controls</span>
+      <button id="minimizeBtn">Hide</button>
+    </div>
+
+    <div id="toolbarBody">
+      <button id="readBtn">Read Clipboard</button>
+      <button id="zoomIn">Zoom In</button>
+      <button id="zoomOut">Zoom Out</button>
+      <button id="fit">Fit</button>
+      <button id="actual">100%</button>
+      <button id="flipHBtn">Flip Horizontal</button>
+      <button id="upsideDownBtn">Upside Down</button>
+      <button id="resetOrientationBtn">Reset Orientation</button>
+      <span id="scaleText">-</span>
+      <span class="smallText">Wheel: zoom / Drag: move</span>
+    </div>
+  </div>
+
+  <div id="viewer">
+    <div id="content">
+      <img id="image" alt="">
+    </div>
+  </div>
+
+  <div id="hint">
+    Copy an image, then press Ctrl + V on this page.<br>
+    You can also click "Read Clipboard".
+  </div>
+
+  <script>
+    const viewer = document.getElementById("viewer");
+    const content = document.getElementById("content");
+    const image = document.getElementById("image");
+    const hint = document.getElementById("hint");
+    const scaleText = document.getElementById("scaleText");
+
+    const toolbar = document.getElementById("toolbar");
+    const toolbarHeader = document.getElementById("toolbarHeader");
+    const minimizeBtn = document.getElementById("minimizeBtn");
+
+    const flipHBtn = document.getElementById("flipHBtn");
+    const upsideDownBtn = document.getElementById("upsideDownBtn");
+    const resetOrientationBtn = document.getElementById("resetOrientationBtn");
+
+    let scale = 1;
+    let naturalWidth = 0;
+    let naturalHeight = 0;
+    let imageUrl = null;
+
+    let flipHorizontal = false;
+    let upsideDown = false;
+
+    function clamp(value, min, max) {
+      return Math.max(min, Math.min(max, value));
+    }
+
+    function updateImageTransform() {
+      const scaleX = flipHorizontal ? -1 : 1;
+      const rotation = upsideDown ? 180 : 0;
+      image.style.transform = `scaleX(${scaleX}) rotate(${rotation}deg)`;
+
+      flipHBtn.classList.toggle("activeToggle", flipHorizontal);
+      upsideDownBtn.classList.toggle("activeToggle", upsideDown);
+    }
+
+    function updateSize() {
+      if (!naturalWidth || !naturalHeight) return;
+
+      const w = naturalWidth * scale;
+      const h = naturalHeight * scale;
+
+      content.style.width = w + "px";
+      content.style.height = h + "px";
+      image.style.width = w + "px";
+      image.style.height = h + "px";
+
+      scaleText.textContent = Math.round(scale * 100) + "%";
+      updateImageTransform();
+    }
+
+    function setImage(fileOrBlob) {
+      if (imageUrl) URL.revokeObjectURL(imageUrl);
+
+      imageUrl = URL.createObjectURL(fileOrBlob);
+      image.src = imageUrl;
+
+      image.onload = () => {
+        naturalWidth = image.naturalWidth;
+        naturalHeight = image.naturalHeight;
+        hint.style.display = "none";
+
+        flipHorizontal = false;
+        upsideDown = false;
+        updateImageTransform();
+
+        fitToScreen();
+      };
+    }
+
+    function fitToScreen() {
+      if (!naturalWidth || !naturalHeight) return;
+
+      const sx = viewer.clientWidth / naturalWidth;
+      const sy = viewer.clientHeight / naturalHeight;
+
+      scale = Math.min(sx, sy, 1);
+      updateSize();
+
+      requestAnimationFrame(() => {
+        viewer.scrollLeft = Math.max(0, (content.clientWidth - viewer.clientWidth) / 2);
+        viewer.scrollTop = Math.max(0, (content.clientHeight - viewer.clientHeight) / 2);
+      });
+    }
+
+    function zoomAt(newScale, clientX, clientY) {
+      if (!naturalWidth || !naturalHeight) return;
+
+      const rect = viewer.getBoundingClientRect();
+      const oldScale = scale;
+
+      const offsetX = clientX - rect.left;
+      const offsetY = clientY - rect.top;
+
+      const imageX = (viewer.scrollLeft + offsetX) / oldScale;
+      const imageY = (viewer.scrollTop + offsetY) / oldScale;
+
+      scale = clamp(newScale, 0.03, 20);
+      updateSize();
+
+      viewer.scrollLeft = imageX * scale - offsetX;
+      viewer.scrollTop = imageY * scale - offsetY;
+    }
+
+    document.addEventListener("paste", event => {
+      const items = event.clipboardData && event.clipboardData.items;
+      if (!items) return;
+
+      for (const item of items) {
+        if (item.type.startsWith("image/")) {
+          const file = item.getAsFile();
+          if (file) {
+            event.preventDefault();
+            setImage(file);
+          }
+          return;
+        }
+      }
+
+      alert("No image found in clipboard.");
+    });
+
+    document.getElementById("readBtn").addEventListener("click", async () => {
+      try {
+        const items = await navigator.clipboard.read();
+
+        for (const item of items) {
+          const imageType = item.types.find(type => type.startsWith("image/"));
+          if (imageType) {
+            const blob = await item.getType(imageType);
+            setImage(blob);
+            return;
+          }
+        }
+
+        alert("No image found in clipboard.");
+      } catch (e) {
+        alert("Could not read clipboard. Please use Ctrl + V instead.");
+      }
+    });
+
+    viewer.addEventListener("wheel", event => {
+      if (!naturalWidth || !naturalHeight) return;
+
+      event.preventDefault();
+
+      const factor = event.deltaY < 0 ? 1.12 : 0.88;
+      zoomAt(scale * factor, event.clientX, event.clientY);
+    }, { passive: false });
+
+    document.getElementById("zoomIn").addEventListener("click", () => {
+      zoomAt(scale * 1.25, viewer.clientWidth / 2, viewer.clientHeight / 2);
+    });
+
+    document.getElementById("zoomOut").addEventListener("click", () => {
+      zoomAt(scale * 0.8, viewer.clientWidth / 2, viewer.clientHeight / 2);
+    });
+
+    document.getElementById("fit").addEventListener("click", fitToScreen);
+
+    document.getElementById("actual").addEventListener("click", () => {
+      zoomAt(1, viewer.clientWidth / 2, viewer.clientHeight / 2);
+    });
+
+    flipHBtn.addEventListener("click", () => {
+      flipHorizontal = !flipHorizontal;
+      updateImageTransform();
+    });
+
+    upsideDownBtn.addEventListener("click", () => {
+      upsideDown = !upsideDown;
+      updateImageTransform();
+    });
+
+    resetOrientationBtn.addEventListener("click", () => {
+      flipHorizontal = false;
+      upsideDown = false;
+      updateImageTransform();
+    });
+
+    let imageDragging = false;
+    let imageStartX = 0;
+    let imageStartY = 0;
+    let imageStartScrollLeft = 0;
+    let imageStartScrollTop = 0;
+
+    viewer.addEventListener("mousedown", event => {
+      if (event.target.closest("#toolbar")) return;
+
+      imageDragging = true;
+      viewer.classList.add("dragging");
+      imageStartX = event.clientX;
+      imageStartY = event.clientY;
+      imageStartScrollLeft = viewer.scrollLeft;
+      imageStartScrollTop = viewer.scrollTop;
+    });
+
+    window.addEventListener("mousemove", event => {
+      if (!imageDragging) return;
+
+      const dx = event.clientX - imageStartX;
+      const dy = event.clientY - imageStartY;
+
+      viewer.scrollLeft = imageStartScrollLeft - dx;
+      viewer.scrollTop = imageStartScrollTop - dy;
+    });
+
+    window.addEventListener("mouseup", () => {
+      imageDragging = false;
+      viewer.classList.remove("dragging");
+    });
+
+    let toolbarDragging = false;
+    let toolbarStartX = 0;
+    let toolbarStartY = 0;
+    let toolbarStartLeft = 0;
+    let toolbarStartTop = 0;
+
+    toolbarHeader.addEventListener("mousedown", event => {
+      if (event.target === minimizeBtn) return;
+
+      toolbarDragging = true;
+      toolbarStartX = event.clientX;
+      toolbarStartY = event.clientY;
+
+      const rect = toolbar.getBoundingClientRect();
+      toolbarStartLeft = rect.left;
+      toolbarStartTop = rect.top;
+
+      event.preventDefault();
+    });
+
+    window.addEventListener("mousemove", event => {
+      if (!toolbarDragging) return;
+
+      const dx = event.clientX - toolbarStartX;
+      const dy = event.clientY - toolbarStartY;
+
+      const newLeft = clamp(toolbarStartLeft + dx, 0, window.innerWidth - 80);
+      const newTop = clamp(toolbarStartTop + dy, 0, window.innerHeight - 36);
+
+      toolbar.style.left = newLeft + "px";
+      toolbar.style.top = newTop + "px";
+      toolbar.style.right = "auto";
+      toolbar.style.bottom = "auto";
+    });
+
+    window.addEventListener("mouseup", () => {
+      toolbarDragging = false;
+    });
+
+    minimizeBtn.addEventListener("click", () => {
+      toolbar.classList.toggle("minimized");
+      minimizeBtn.textContent = toolbar.classList.contains("minimized") ? "Show" : "Hide";
+    });
+
+    window.addEventListener("resize", updateSize);
+  </script>
+</body>
+</html>

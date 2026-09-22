@@ -15,10 +15,10 @@ Try it online: [riosecca.github.io/clipboard-image-viewer](https://riosecca.gith
 - Zoom with the mouse wheel or controls
 - Fit-to-screen and 100% views
 - Drag to pan images
-- Horizontal and vertical flipping, plus orientation reset
+- Horizontal flip, 180° rotation, and reset
 - Rotate left or right in 90° increments
 - Display dimensions, format, file size, and zoom level
-- Full-screen view
+- Full-screen view (Full button)
 - Save loaded images as PNG, JPEG, or single-page PDF files
 - Movable, collapsible control panel
 

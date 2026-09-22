@@ -4,6 +4,8 @@ A single-page viewer for loading images from the browser clipboard or local file
 
 Try it online: [riosecca.github.io/clipboard-image-viewer](https://riosecca.github.io/clipboard-image-viewer/)
 
+Source code: [github.com/riosecca/clipboard-image-viewer](https://github.com/riosecca/clipboard-image-viewer)
+
 ## Usage
 
 1. Open `index.html` in a supported browser.
